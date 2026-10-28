@@ -64,6 +64,19 @@ def validation_mse(model: nn.Module, config: HeatConfig, grid_size: int = 80) ->
     return torch.mean((prediction - target) ** 2).item()
 
 
+@torch.no_grad()
+def relative_l2_error(model: nn.Module, config: HeatConfig, grid_size: int = 80) -> float:
+    device = config.device
+    x = torch.linspace(config.x_min, config.x_max, grid_size, device=device)
+    t = torch.linspace(config.t_min, config.t_max, grid_size, device=device)
+    xx, tt = torch.meshgrid(x, t, indexing="ij")
+    x_flat = xx.reshape(-1, 1)
+    t_flat = tt.reshape(-1, 1)
+    prediction = model(torch.cat([x_flat, t_flat], dim=1))
+    target = analytical_solution(x_flat, t_flat, config.alpha)
+    return (torch.linalg.norm(prediction - target) / torch.linalg.norm(target)).item()
+
+
 def train(config: HeatConfig) -> tuple[MLP, list[dict[str, float]]]:
     torch.manual_seed(config.seed)
     np.random.seed(config.seed)
@@ -150,6 +163,7 @@ def main() -> None:
 
     torch.save(model.state_dict(), output_dir / "model.pt")
     save_history(history, output_dir / "history.csv")
+    print(f"relative L2 error vs analytical solution: {relative_l2_error(model, config):.3e}")
     maybe_plot(model, config, output_dir)
 
 
